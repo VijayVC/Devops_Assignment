@@ -44,7 +44,7 @@ public class IPReflectorTest {
         // Assert
         assertEquals("Your public IP address is: " + expectedIp, result);
         //verify(ipReflector,((IPReflector) times(1)).getPublicIp());
-        assertNotNull(result);
+        //assertNotNull(result);
     }
 
 	/*
