@@ -34,7 +34,7 @@ public class IPReflectorTest {
     @Test
     void testGetPublicIpSuccess() {
         // Arrange
-        String expectedIp = "27.5.177.138";
+        String expectedIp = "54.84.117.132";
  
         //when(restTemplate.getForObject(Mockito.any(),Mockito.eq(String.class))).thenReturn(expectedIp);
         //when(ipReflector.getPublicIp()).thenReturn(expectedIp);
