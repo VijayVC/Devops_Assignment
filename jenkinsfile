@@ -1,0 +1,141 @@
+pipeline {
+    agent any
+    
+    tools{
+        jdk 'jdk11'
+        maven 'maven3'
+        }
+    environment{
+        SCANNER_HOME=tool 'sonar-scanner'
+        DOCKER_REPO = 'vijaydocker1812' // Replace with your Docker Hub username
+        RECIPIENTS = 'gjvijay1999@gmail.com'
+    }
+    stages {
+        stage('Git Checkout') {
+            steps {
+                //To checkout the source code from Github
+                git branch: 'main', url: 'https://github.com/VijayVC/Devops_Assignment.git'
+                sh "pwd"
+            }
+        stage('Test') {
+            steps {
+                //to perform unittesting
+                sh "mvn test"
+            }
+        }
+        stage('SonarQube Analysis') {
+            steps {
+                //to perform code checks and analysis
+                withSonarQubeEnv('sonar') {
+                sh '''
+                $SCANNER_HOME/bin/sonar-scanner \
+                -Dsonar.projectName=BoardGame \
+                -Dsonar.projectKey=BoardGame \
+                -Dsonar.java.binaries=.
+                '''
+                }
+            }    
+        }
+        stage('Quality Gate') {
+            steps {
+                //which shows the qulity of the code in SonarQube
+                script{
+                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token'
+                }
+            }
+        }
+        stage('Build') {
+            steps {
+                // To Build the application code into artifact
+                sh "mvn clean package"
+                
+            }
+            post {
+                failure {
+                    //To display if the build is failed
+                    echo "Build failed!"
+                    
+                }
+            }
+        }
+        stage('Archive') {
+            steps {
+                // Archive the artifact and specify the target directory
+                archiveArtifacts artifacts: 'target/*.war', allowEmptyArchive: true
+            }
+        }
+        stage('docker build') {
+            steps {
+                script{
+                    //to build the docker image using the docker file
+                    sh '''
+                        df=$(pwd)  
+                        docker build -f $df/dockerfile -t my-app:latest $df
+                    '''
+                }
+            }
+        }
+        stage('Get Docker Image ID and Push') {
+            steps {
+                script {
+                    // Define the Docker image name and tag
+                    def imageName = 'my-app'
+                    def imageTag = 'latest'
+                    
+                    // Get the Docker image ID
+                    def imageId = sh(script: "docker images -q ${imageName}:${imageTag}", returnStdout: true).trim()
+
+                    // Check if image ID is empty (i.e., image not found)
+                    if (!imageId) {
+                        error "Docker image ${imageName}:${imageTag} not found."
+                    }
+                    
+                    echo "Docker Image ID: ${imageId}"
+                    
+                    // Push the image to Docker Hub
+                    sh """
+                    #!/bin/bash
+                    echo "Pushing ${DOCKER_REPO}/${imageName}:${imageTag} to Docker Hub"
+                    docker tag ${imageId} ${DOCKER_REPO}/${imageName}:${imageTag}
+                    
+                    docker push ${DOCKER_REPO}/${imageName}:${imageTag}
+                    
+                    if [ \$? -eq 0 ]; then
+                        echo "Successfully pushed ${DOCKER_REPO}/${imageName}:${imageTag}"
+                    else
+                        echo "Failed to push ${DOCKER_REPO}/${imageName}:${imageTag}"
+                        exit 1
+                    fi
+                    """
+                }
+            }
+        }
+
+        stage('docker Run') {
+            steps {
+                script{
+                    //to execute the docker file
+                    def imageName = 'my-app'
+                    def imageTag = 'latest'
+                    sh "docker run -d -p 8081:8080 -t ${imageName}:${imageTag}"
+                }
+            }
+        }
+    }
+    post {
+        success {
+            emailext(
+                subject: "Build Successful",
+                body: "The build was successful.",
+                to: "${env.RECIPIENTS}"
+            )
+           }
+        failure {
+            emailext(
+                subject: "Build Failed",
+                body: "The build failed. Check the Jenkins console output for details.",
+                to: "${env.RECIPIENTS}"
+            )
+        }
+    }  
+}
